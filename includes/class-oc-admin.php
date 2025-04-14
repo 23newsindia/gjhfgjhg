@@ -1,4 +1,8 @@
 <?php
+/**
+ * Offers Carousel Admin Class
+ * Handles all admin functionality for the Offers Carousel plugin
+ */
 
 class OC_Admin {
     public function __construct() {
@@ -15,166 +19,35 @@ class OC_Admin {
             'Offers Carousels',
             'manage_options',
             'offers-carousels',
-            [$this, 'render_admin_page'], // This callback must exist
+            [$this, 'render_admin_page'],
             'dashicons-slides',
             30
         );
     }
 
-  
-  
-    
-  public function save_carousel_ajax() {
-        try {
-            if (!check_ajax_referer('oc_admin_nonce', 'nonce', false)) {
-                throw new Exception('Security check failed');
-            }
+    public function render_admin_page() {
+        ?>
+        <div class="wrap">
+            <div class="oc-admin-container">
+                <div class="oc-admin-header">
+                    <h1><?php esc_html_e('Offers Carousels', 'offers-carousel'); ?></h1>
+                    <button id="oc-add-new" class="button button-primary">
+                        <?php esc_html_e('Add New Carousel', 'offers-carousel'); ?>
+                    </button>
+                </div>
 
-            if (!current_user_can('manage_options')) {
-                throw new Exception('Permission denied');
-            }
+                <div class="oc-carousel-list">
+                    <?php $this->render_carousels_table(); ?>
+                </div>
 
-            // Validate required fields
-            if (empty($_POST['name']) || empty($_POST['slug'])) {
-                throw new Exception('Name and slug are required');
-            }
-
-            // Get and validate slides
-            $slides = json_decode(stripslashes($_POST['slides']), true);
-            if (json_last_error() !== JSON_ERROR_NONE || !is_array($slides)) {
-                throw new Exception('Invalid slides data');
-            }
-
-            // Get and validate settings
-            $settings = json_decode(stripslashes($_POST['settings']), true);
-            if (json_last_error() !== JSON_ERROR_NONE || !is_array($settings)) {
-                throw new Exception('Invalid settings data');
-            }
-
-            // Sanitize slides
-            $sanitized_slides = array_map(function($slide) {
-                return array(
-                    'bg_image' => esc_url_raw($slide['bg_image']),
-                    'title' => sanitize_text_field($slide['title']),
-                    'subtitle' => sanitize_text_field($slide['subtitle']),
-                    'button_link' => esc_url_raw($slide['button_link']),
-                    'button_text' => sanitize_text_field($slide['button_text'])
-                );
-            }, $slides);
-
-            // Sanitize settings
-            $sanitized_settings = array(
-                'slides_per_view' => absint($settings['slides_per_view']),
-                'effect' => sanitize_text_field($settings['effect']),
-                'autoplay' => (bool) $settings['autoplay'],
-                'autoplay_delay' => absint($settings['autoplay_delay'])
-            );
-
-            // Prepare data for database
-            $data = array(
-                'name' => sanitize_text_field($_POST['name']),
-                'slug' => sanitize_title($_POST['slug']),
-                'slides' => wp_json_encode($sanitized_slides),
-                'settings' => wp_json_encode($sanitized_settings),
-                'updated_at' => current_time('mysql')
-            );
-
-            global $wpdb;
-            $table_name = $wpdb->prefix . 'offers_carousels';
-
-            // Insert or update based on carousel_id
-            if (!empty($_POST['carousel_id'])) {
-                $result = $wpdb->update(
-                    $table_name,
-                    $data,
-                    array('carousel_id' => absint($_POST['carousel_id']))
-                );
-            } else {
-                $data['created_at'] = current_time('mysql');
-                $result = $wpdb->insert($table_name, $data);
-            }
-
-            if ($result === false) {
-                throw new Exception($wpdb->last_error ?: 'Database error occurred');
-            }
-
-            wp_send_json_success('Carousel saved successfully');
-
-        } catch (Exception $e) {
-            wp_send_json_error($e->getMessage());
-        }
+                <div class="oc-carousel-editor" style="display: none;">
+                    <?php $this->render_carousel_editor(); ?>
+                </div>
+            </div>
+        </div>
+        <?php
     }
 
-  
-  
-  public function get_carousel_ajax() {
-        try {
-            if (!check_ajax_referer('oc_admin_nonce', 'nonce', false)) {
-                throw new Exception('Security check failed');
-            }
-
-            if (!current_user_can('manage_options')) {
-                throw new Exception('Permission denied');
-            }
-
-            $carousel_id = absint($_POST['id']);
-            if (!$carousel_id) {
-                throw new Exception('Invalid carousel ID');
-            }
-
-            $carousel = OC_DB::get_carousel_by_id($carousel_id);
-            if (!$carousel) {
-                throw new Exception('Carousel not found');
-            }
-
-            // Decode JSON data
-            $slides = json_decode($carousel->slides, true);
-            $settings = json_decode($carousel->settings, true);
-
-            wp_send_json_success([
-                'id' => $carousel->carousel_id,
-                'name' => $carousel->name,
-                'slug' => $carousel->slug,
-                'slides' => $slides,
-                'settings' => $settings
-            ]);
-
-        } catch (Exception $e) {
-            wp_send_json_error($e->getMessage());
-        }
-    }
-
-    public function delete_carousel_ajax() {
-        try {
-            if (!check_ajax_referer('oc_admin_nonce', 'nonce', false)) {
-                throw new Exception('Security check failed');
-            }
-
-            if (!current_user_can('manage_options')) {
-                throw new Exception('Permission denied');
-            }
-
-            $carousel_id = absint($_POST['id']);
-            if (!$carousel_id) {
-                throw new Exception('Invalid carousel ID');
-            }
-
-            $result = OC_DB::delete_carousel($carousel_id);
-            if ($result === false) {
-                throw new Exception('Failed to delete carousel');
-            }
-
-            wp_send_json_success('Carousel deleted successfully');
-
-        } catch (Exception $e) {
-            wp_send_json_error($e->getMessage());
-        }
-    }
-  
-  
-  
-  
-  
     public function enqueue_assets($hook) {
         if ($hook !== 'toplevel_page_offers-carousels') return;
         
@@ -303,20 +176,143 @@ class OC_Admin {
                 <input type="number" id="oc-autoplay-delay" value="3000" min="1000" step="500">
             </div>
         </div>
-
- <div class="wrap">
-            <h1><?php esc_html_e('Offers Carousels', 'offers-carousel'); ?></h1>
-            
-            <div id="oc-admin-root">
-                <!-- React app will be mounted here -->
-                Loading Offers Carousel admin interface...
-            </div>
-        </div>
-
-
-
         <?php
     }
 
- 
+    public function save_carousel_ajax() {
+        try {
+            if (!isset($_POST['nonce'])) {
+                throw new Exception('Nonce not provided');
+            }
+            
+            if (!wp_verify_nonce($_POST['nonce'], 'oc_admin_nonce')) {
+                throw new Exception('Security check failed');
+            }
+
+            if (!current_user_can('manage_options')) {
+                throw new Exception('Permission denied');
+            }
+
+            // Validate required fields
+            if (empty($_POST['name']) || empty($_POST['slug'])) {
+                throw new Exception('Name and slug are required');
+            }
+
+            // Get and validate slides
+            $slides = isset($_POST['slides']) ? json_decode(stripslashes($_POST['slides']), true) : [];
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($slides)) {
+                throw new Exception('Invalid slides data');
+            }
+
+            // Get and validate settings
+            $settings = isset($_POST['settings']) ? json_decode(stripslashes($_POST['settings']), true) : [];
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($settings)) {
+                throw new Exception('Invalid settings data');
+            }
+
+            // Prepare data for database
+            $data = [
+                'name' => sanitize_text_field($_POST['name']),
+                'slug' => sanitize_title($_POST['slug']),
+                'slides' => wp_json_encode($slides),
+                'settings' => wp_json_encode($settings),
+                'updated_at' => current_time('mysql')
+            ];
+
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'offers_carousels';
+
+            // Insert or update
+            if (!empty($_POST['carousel_id'])) {
+                $result = $wpdb->update(
+                    $table_name,
+                    $data,
+                    ['carousel_id' => absint($_POST['carousel_id'])]
+                );
+            } else {
+                $data['created_at'] = current_time('mysql');
+                $result = $wpdb->insert($table_name, $data);
+            }
+
+            if ($result === false) {
+                throw new Exception($wpdb->last_error ?: 'Database error occurred');
+            }
+
+            wp_send_json_success([
+                'message' => 'Carousel saved successfully',
+                'id' => !empty($_POST['carousel_id']) ? $_POST['carousel_id'] : $wpdb->insert_id
+            ]);
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage(), 500);
+        }
+    }
+
+    public function get_carousel_ajax() {
+        try {
+            if (!isset($_POST['nonce'])) {
+                throw new Exception('Nonce not provided');
+            }
+            
+            if (!wp_verify_nonce($_POST['nonce'], 'oc_admin_nonce')) {
+                throw new Exception('Security check failed');
+            }
+
+            if (!current_user_can('manage_options')) {
+                throw new Exception('Permission denied');
+            }
+
+            $carousel_id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+            if (!$carousel_id) {
+                throw new Exception('Invalid carousel ID');
+            }
+
+            $carousel = OC_DB::get_carousel_by_id($carousel_id);
+            if (!$carousel) {
+                throw new Exception('Carousel not found');
+            }
+
+            wp_send_json_success([
+                'id' => $carousel->carousel_id,
+                'name' => $carousel->name,
+                'slug' => $carousel->slug,
+                'slides' => json_decode($carousel->slides, true),
+                'settings' => json_decode($carousel->settings, true)
+            ]);
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage(), 500);
+        }
+    }
+
+    public function delete_carousel_ajax() {
+        try {
+            if (!isset($_POST['nonce'])) {
+                throw new Exception('Nonce not provided');
+            }
+            
+            if (!wp_verify_nonce($_POST['nonce'], 'oc_admin_nonce')) {
+                throw new Exception('Security check failed');
+            }
+
+            if (!current_user_can('manage_options')) {
+                throw new Exception('Permission denied');
+            }
+
+            $carousel_id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+            if (!$carousel_id) {
+                throw new Exception('Invalid carousel ID');
+            }
+
+            $result = OC_DB::delete_carousel($carousel_id);
+            if ($result === false) {
+                throw new Exception('Failed to delete carousel');
+            }
+
+            wp_send_json_success(['message' => 'Carousel deleted successfully']);
+
+        } catch (Exception $e) {
+            wp_send_json_error($e->getMessage(), 500);
+        }
+    }
 }
