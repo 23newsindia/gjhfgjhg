@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Toggle between list and editor views
+    /// Toggle between list and editor views
     const addNewBtn = document.getElementById('oc-add-new');
     const carouselList = document.querySelector('.oc-carousel-list');
     const carouselEditor = document.querySelector('.oc-carousel-editor');
@@ -140,6 +140,193 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // Edit carousel handler will be added in Part 3
-    // Save carousel handler will be added in Part 3
+    // Save carousel
+document.getElementById('oc-save-carousel')?.addEventListener('click', async function(e) {
+    e.preventDefault();
+    
+    const name = document.getElementById('oc-carousel-name').value;
+    const slug = document.getElementById('oc-carousel-slug').value;
+    
+    if (!name || !slug) {
+        alert('Name and slug are required!');
+        return;
+    }
+    
+    // Collect slides data
+    const slides = [];
+    document.querySelectorAll('.oc-slide').forEach(slide => {
+        slides.push({
+            bg_image: slide.querySelector('.oc-bg-image').value,
+            title: slide.querySelector('.oc-title-text').value,
+            subtitle: slide.querySelector('.oc-subtitle-text').value,
+            button_link: slide.querySelector('.oc-button-link').value,
+            button_text: slide.querySelector('.oc-button-text').value
+        });
+    });
+    
+    if (slides.length === 0) {
+        alert('Add at least one slide!');
+        return;
+    }
+    
+    // Collect settings
+    const settings = {
+        slides_per_view: parseInt(document.getElementById('oc-slides-per-view').value),
+        effect: document.getElementById('oc-effect').value,
+        autoplay: document.getElementById('oc-autoplay').checked,
+        autoplay_delay: parseInt(document.getElementById('oc-autoplay-delay').value)
+    };
+    
+    // Show loading state
+    const saveBtn = this;
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = 'Saving...';
+    saveBtn.disabled = true;
+
+    // REPLACE FROM HERE >>>>
+    try {
+        const params = new URLSearchParams({
+            action: 'oc_save_carousel',
+            nonce: oc_admin_vars.nonce,
+            name: name,
+            slug: slug,
+            slides: JSON.stringify(slides),
+            settings: JSON.stringify(settings)
+        });
+
+        const carouselId = document.querySelector('.oc-carousel-editor').dataset.id;
+        if (carouselId) {
+            params.append('carousel_id', carouselId);
+        }
+
+        const response = await fetch(oc_admin_vars.ajax_url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params
+        });
+
+        // Add the improved error handling
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP error! status: ${response.status} - ${text}`);
+        }
+
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('Carousel saved successfully!');
+            window.location.reload();
+        } else {
+            throw new Error(data.data || 'Failed to save carousel');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to save carousel: ' + error.message);
+    } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+    }
+    });
+
+
+
+
+
+
+  
+    // Edit carousel
+    document.addEventListener('click', async function(e) {
+        if (e.target.classList.contains('oc-edit-carousel')) {
+            e.preventDefault();
+            
+            const carouselId = e.target.dataset.id;
+            
+            try {
+                const response = await fetch(oc_admin_vars.ajax_url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        action: 'oc_get_carousel',
+                        nonce: oc_admin_vars.nonce,
+                        id: carouselId
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    const carousel = data.data;
+                    
+                    // Switch to editor view
+                    carouselList.style.display = 'none';
+                    carouselEditor.style.display = 'block';
+                    
+                    // Set carousel ID
+                    carouselEditor.dataset.id = carousel.id;
+                    
+                    // Fill in basic info
+                    document.getElementById('oc-carousel-name').value = carousel.name;
+                    document.getElementById('oc-carousel-slug').value = carousel.slug;
+                    
+                    // Clear and recreate slides
+                    document.getElementById('oc-slides-container').innerHTML = '';
+                    carousel.slides.forEach(slide => addNewSlide(slide));
+                    
+                    // Set settings
+                    document.getElementById('oc-slides-per-view').value = carousel.settings.slides_per_view;
+                    document.getElementById('oc-effect').value = carousel.settings.effect;
+                    document.getElementById('oc-autoplay').checked = carousel.settings.autoplay;
+                    document.getElementById('oc-autoplay-delay').value = carousel.settings.autoplay_delay;
+                } else {
+                    throw new Error(data.data || 'Failed to load carousel');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to load carousel: ' + error.message);
+            }
+        }
+    });
+
+    // Delete carousel
+    document.addEventListener('click', async function(e) {
+        if (e.target.classList.contains('oc-delete-carousel')) {
+            e.preventDefault();
+            
+            if (!confirm('Are you sure you want to delete this carousel?')) {
+                return;
+            }
+            
+            const carouselId = e.target.dataset.id;
+            
+            try {
+                const response = await fetch(oc_admin_vars.ajax_url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        action: 'oc_delete_carousel',
+                        nonce: oc_admin_vars.nonce,
+                        id: carouselId
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('Carousel deleted successfully!');
+                    window.location.reload();
+                } else {
+                    throw new Error(data.data || 'Failed to delete carousel');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to delete carousel: ' + error.message);
+            }
+        }
+    });
 });
